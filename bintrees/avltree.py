@@ -131,10 +131,11 @@ class AVLTree(ABCTree):
         self._count += 1
         return Node(key, value)
 
-    def insert(self, key, value, rotation_hook=None, parent_hook=None):
+    def insert(self, key, value, rotation_hook=None, parent_hook=None, update_hook=None, descended_path_hook=None):
         """T.insert(key, value) <==> T[key] = value, insert key, value into tree."""
         if self._root is None:
             self._root = self._new_node(key, value)
+            return self._root
         else:
             node_stack = []  # node stack
             dir_stack = array('I')  # direction stack
@@ -142,10 +143,14 @@ class AVLTree(ABCTree):
             node = self._root
             direction = LEFT
             # search for an empty link, save path
+            updated = False
             while True:
                 if key == node.key:  # update existing item
                     node.value = value
-                    return
+                    if update_hook is not None:
+                        update_hook(updated_node=node, node_stack=node_stack, dir_stack=dir_stack)
+                    updated = True
+                    break
                 direction = RIGHT if key > node.key else LEFT
                 dir_stack.append(direction)
                 node_stack.append(node)
@@ -153,8 +158,15 @@ class AVLTree(ABCTree):
                     break
                 node = node[direction]
 
+
+
+            if descended_path_hook is not None:
+                descended_path_hook(new_node = node[direction], node_stack=node_stack, dir_stack=dir_stack)
+
+            if updated:
+                return node
             # Insert a new node at the bottom of the tree
-            node[direction] = self._new_node(key, value)
+            new_node = node[direction] = self._new_node(key, value)
 
             # Walk back up the search path
             top = len(node_stack) - 1
@@ -195,6 +207,7 @@ class AVLTree(ABCTree):
 
                 top_node.balance = max(left_height, right_height) + 1
                 top -= 1
+            return new_node
 
     def remove(self, key):
         """T.remove(key) <==> del T[key], remove item <key> from tree."""
@@ -224,7 +237,7 @@ class AVLTree(ABCTree):
             # Remove the node
             if (node.left is None) or (node.right is None):
                 # Which child is not null?
-                direction = 1 if node.left is None else 0
+                direction = RIGHT if node.left is None else LEFT
 
                 # Fix parent
                 if top != 0:
