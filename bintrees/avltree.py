@@ -158,15 +158,13 @@ class AVLTree(ABCTree):
                     break
                 node = node[direction]
 
-
-
-            if descended_path_hook is not None:
-                descended_path_hook(new_node = node[direction], node_stack=node_stack, dir_stack=dir_stack)
-
             if updated:
                 return node
             # Insert a new node at the bottom of the tree
             new_node = node[direction] = self._new_node(key, value)
+
+            if descended_path_hook is not None:
+                descended_path_hook(new_node=new_node, node_stack=node_stack, dir_stack=dir_stack)
 
             # Walk back up the search path
             top = len(node_stack) - 1
