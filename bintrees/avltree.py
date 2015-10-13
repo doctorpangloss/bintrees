@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#coding:utf-8
+# coding:utf-8
 # Author:  mozman (python version)
 # Purpose: avl tree module (Julienne Walker's unbounded none recursive algorithm)
 # source: http://eternallyconfuzzled.com/tuts/datastructures/jsw_tut_avl.aspx
@@ -35,6 +35,12 @@ from array import array
 __all__ = ['AVLTree']
 
 MAXSTACK = 32
+LEFT = 0
+RIGHT = 1
+
+
+def OPPOSITE(side):
+    return 1 - side
 
 
 class Node(object):
@@ -50,11 +56,11 @@ class Node(object):
 
     def __getitem__(self, key):
         """N.__getitem__(key) <==> x[key], where key is 0 (left) or 1 (right)."""
-        return self.left if key == 0 else self.right
+        return self.left if key == LEFT else self.right
 
     def __setitem__(self, key, value):
         """N.__setitem__(key, value) <==> x[key]=value, where key is 0 (left) or 1 (right)."""
-        if key == 0:
+        if key == LEFT:
             self.left = value
         else:
             self.right = value
@@ -71,8 +77,8 @@ def height(node):
     return node.balance if node is not None else -1
 
 
-def jsw_single(root, direction):
-    other_side = 1 - direction
+def jsw_single(root, direction, rotation_hook=None):
+    other_side = OPPOSITE(direction)
     save = root[other_side]
     root[other_side] = save[direction]
     save[direction] = root
@@ -81,13 +87,18 @@ def jsw_single(root, direction):
     slh = height(save[other_side])
     root.balance = max(rlh, rrh) + 1
     save.balance = max(slh, root.balance) + 1
+    if rotation_hook is not None:
+        if direction == LEFT:
+            rotation_hook(new_parent=save, new_left=save[direction], new_right=save[OPPOSITE(direction)])
+        if direction == RIGHT:
+            rotation_hook(new_parent=save, new_right=save[direction], new_left=save[OPPOSITE(direction)])
     return save
 
 
-def jsw_double(root, direction):
-    other_side = 1 - direction
-    root[other_side] = jsw_single(root[other_side], other_side)
-    return jsw_single(root, direction)
+def jsw_double(root, direction, rotation_hook=None):
+    other_side = OPPOSITE(direction)
+    root[other_side] = jsw_single(root[other_side], other_side, rotation_hook=rotation_hook)
+    return jsw_single(root, direction, rotation_hook=rotation_hook)
 
 
 class AVLTree(ABCTree):
@@ -114,12 +125,13 @@ class AVLTree(ABCTree):
 
     see also abctree.ABCTree() class.
     """
+
     def _new_node(self, key, value):
         """Create a new tree node."""
         self._count += 1
         return Node(key, value)
 
-    def insert(self, key, value):
+    def insert(self, key, value, rotation_hook=None, parent_hook=None):
         """T.insert(key, value) <==> T[key] = value, insert key, value into tree."""
         if self._root is None:
             self._root = self._new_node(key, value)
@@ -127,14 +139,14 @@ class AVLTree(ABCTree):
             node_stack = []  # node stack
             dir_stack = array('I')  # direction stack
             done = False
-            top = 0
             node = self._root
+            direction = LEFT
             # search for an empty link, save path
             while True:
                 if key == node.key:  # update existing item
                     node.value = value
                     return
-                direction = 1 if key > node.key else 0
+                direction = RIGHT if key > node.key else LEFT
                 dir_stack.append(direction)
                 node_stack.append(node)
                 if node[direction] is None:
@@ -148,7 +160,7 @@ class AVLTree(ABCTree):
             top = len(node_stack) - 1
             while (top >= 0) and not done:
                 direction = dir_stack[top]
-                other_side = 1 - direction
+                other_side = OPPOSITE(direction)
                 top_node = node_stack[top]
                 left_height = height(top_node[direction])
                 right_height = height(top_node[other_side])
@@ -161,13 +173,17 @@ class AVLTree(ABCTree):
                     b = top_node[direction][other_side]
 
                     if height(a) >= height(b):
-                        node_stack[top] = jsw_single(top_node, other_side)
+                        node_stack[top] = jsw_single(top_node, other_side, rotation_hook=rotation_hook)
                     else:
-                        node_stack[top] = jsw_double(top_node, other_side)
+                        node_stack[top] = jsw_double(top_node, other_side, rotation_hook=rotation_hook)
 
                     # Fix parent
                     if top != 0:
+                        new_parent = node_stack[top - 1]
+                        new_child = node_stack[top]
                         node_stack[top - 1][dir_stack[top - 1]] = node_stack[top]
+                        if parent_hook is not None:
+                            parent_hook(new_parent=new_parent, new_child=new_child)
                     else:
                         self._root = node_stack[0]
                     done = True
